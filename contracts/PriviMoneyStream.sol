@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.0;
 
 import "hardhat/console.sol";
@@ -7,6 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import "./interfaces/IERC1620.sol";
 
@@ -15,6 +17,8 @@ import "./interfaces/IERC1620.sol";
  * @author 0xlook
  */
 contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
+    using SafeMath for uint256;
+
     /*** Struct  ***/
 
     struct Stream {
@@ -31,27 +35,27 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
 
     /*** Storage Properties ***/
 
-    /**
+    /***
      * @notice In Exp terms, 1e18 is 1, or 100%
      */
     uint256 constant hundredPercent = 1e18;
 
-    /**
+    /***
      * @notice In Exp terms, 1e16 is 0.01, or 1%
      */
     uint256 constant onePercent = 1e16;
 
-    /**
+    /***
      * @notice The percentage fee charged by the contract on the accrued interest.
      */
-    Exp public fee;
+    uint256 public fee;
 
-    /**
+    /***
      * @notice Counter for new stream ids.
      */
     uint256 public nextStreamId;
 
-    /**
+    /***
      * @notice The stream objects identifiable by their unsigned integer ids.
      */
     mapping(uint256 => Stream) private streams;
@@ -86,16 +90,11 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
 
     /*** Contract Logic Starts Here */
 
-    constructor() public {
+    constructor() {
         nextStreamId = 1;
     }
 
     /*** Owner Functions ***/
-
-    struct UpdateFeeLocalVars {
-        MathError mathErr;
-        uint256 feeMantissa;
-    }
 
     /**
      * @notice Updates the Sablier fee.
@@ -105,31 +104,25 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
      */
     function updateFee(uint256 feePercentage) external onlyOwner {
         require(feePercentage <= 100, "fee percentage higher than 100%");
-        UpdateFeeLocalVars memory vars;
 
         /* `feePercentage` will be stored as a mantissa, so we scale it up by one percent in Exp terms. */
-        (vars.mathErr, vars.feeMantissa) = mulUInt(feePercentage, onePercent);
-        /*
-         * `mulUInt` can only return MathError.INTEGER_OVERFLOW but we control `onePercent`
-         * and we know `feePercentage` is maximum 100.
-         */
-        assert(vars.mathErr == MathError.NO_ERROR);
+        fee = feePercentage.mul(onePercent);
 
-        fee = Exp({ mantissa: vars.feeMantissa });
         emit UpdateFee(feePercentage);
     }
 
     /*** View Functions ***/
 
-    /**
+    /***
      * @notice Returns the compounding stream with all its properties.
      * @dev Throws if the id does not point to a valid stream.
      * @param streamId The id of the stream to query.
      * @return The stream object.
      */
     function getStream(uint256 streamId)
-        external
+        public
         view
+        override
         streamExists(streamId)
         returns (
             address sender,
@@ -152,7 +145,7 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
         ratePerSecond = streams[streamId].ratePerSecond;
     }
 
-    /**
+    /***
      * @notice Returns either the delta in seconds between `block.timestamp` and `startTime` or
      *  between `stopTime` and `startTime, whichever is smaller. If `block.timestamp` is before
      *  `startTime`, it returns 0.
@@ -161,33 +154,29 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
      * @return The time delta in seconds.
      */
     function deltaOf(uint256 streamId) public view streamExists(streamId) returns (uint256 delta) {
-        Types.Stream memory stream = streams[streamId];
+        Stream memory stream = streams[streamId];
         if (block.timestamp <= stream.startTime) return 0;
         if (block.timestamp < stream.stopTime) return block.timestamp - stream.startTime;
         return stream.stopTime - stream.startTime;
     }
 
-    struct BalanceOfLocalVars {
-        MathError mathErr;
-        uint256 recipientBalance;
-        uint256 withdrawalAmount;
-        uint256 senderBalance;
-    }
-
-    /**
+    /***
      * @notice Returns the available funds for the given stream id and address.
      * @dev Throws if the id does not point to a valid stream.
      * @param streamId The id of the stream for which to query the balance.
      * @param who The address for which to query the balance.
      * @return The total funds allocated to `who` as uint256.
      */
-    function balanceOf(uint256 streamId, address who) public view streamExists(streamId) returns (uint256 balance) {
-        Types.Stream memory stream = streams[streamId];
-        BalanceOfLocalVars memory vars;
+    function balanceOf(uint256 streamId, address who) public view override streamExists(streamId) 
+        returns (uint256 balance) 
+    {
+        Stream memory stream = streams[streamId];
+        uint256 recipientBalance;
+        uint256 withdrawalAmount;
+        uint256 senderBalance;
 
         uint256 delta = deltaOf(streamId);
-        (vars.mathErr, vars.recipientBalance) = mulUInt(delta, stream.ratePerSecond);
-        require(vars.mathErr == MathError.NO_ERROR, "recipient balance calculation error");
+        recipientBalance = delta.mul(stream.ratePerSecond);
 
         /*
          * If the stream `balance` does not equal `deposit`, it means there have been withdrawals.
@@ -195,29 +184,16 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
          * streamed until now.
          */
         if (stream.deposit > stream.remainingBalance) {
-            (vars.mathErr, vars.withdrawalAmount) = subUInt(stream.deposit, stream.remainingBalance);
-            assert(vars.mathErr == MathError.NO_ERROR);
-            (vars.mathErr, vars.recipientBalance) = subUInt(vars.recipientBalance, vars.withdrawalAmount);
-            /* `withdrawalAmount` cannot and should not be bigger than `recipientBalance`. */
-            assert(vars.mathErr == MathError.NO_ERROR);
+            withdrawalAmount = stream.deposit.sub(stream.remainingBalance);
+            recipientBalance = recipientBalance.sub(withdrawalAmount);
         }
 
-        if (who == stream.recipient) return vars.recipientBalance;
+        if (who == stream.recipient) return recipientBalance;
         if (who == stream.sender) {
-            (vars.mathErr, vars.senderBalance) = subUInt(stream.remainingBalance, vars.recipientBalance);
-            /* `recipientBalance` cannot and should not be bigger than `remainingBalance`. */
-            assert(vars.mathErr == MathError.NO_ERROR);
-            return vars.senderBalance;
+            senderBalance = stream.remainingBalance.sub(recipientBalance);
+            return senderBalance;
         }
         return 0;
-    }
-
-    /*** Public Effects & Interactions Functions ***/
-
-    struct CreateStreamLocalVars {
-        MathError mathErr;
-        uint256 duration;
-        uint256 ratePerSecond;
     }
 
     /**
@@ -247,7 +223,7 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
         address tokenAddress,
         uint256 startTime,
         uint256 stopTime
-    ) public whenNotPaused returns (uint256) {
+    ) external override whenNotPaused returns (uint256) {
         require(recipient != address(0x00), "stream to the zero address");
         require(recipient != address(this), "stream to the contract itself");
         require(recipient != msg.sender, "stream to the caller");
@@ -255,28 +231,26 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
         require(startTime >= block.timestamp, "start time before block.timestamp");
         require(stopTime > startTime, "stop time before the start time");
 
-        CreateStreamLocalVars memory vars;
-        (vars.mathErr, vars.duration) = subUInt(stopTime, startTime);
-        /* `subUInt` can only return MathError.INTEGER_UNDERFLOW but we know `stopTime` is higher than `startTime`. */
-        assert(vars.mathErr == MathError.NO_ERROR);
+        uint256 duration;
+        uint256 ratePerSecond;
+
+        duration = stopTime.sub(startTime);
 
         /* Without this, the rate per second would be zero. */
-        require(deposit >= vars.duration, "deposit smaller than time delta");
+        require(deposit >= duration, "deposit smaller than time delta");
 
         /* This condition avoids dealing with remainders */
-        require(deposit % vars.duration == 0, "deposit not multiple of time delta");
+        require(deposit % duration == 0, "deposit not multiple of time delta");
 
-        (vars.mathErr, vars.ratePerSecond) = divUInt(deposit, vars.duration);
-        /* `divUInt` can only return MathError.DIVISION_BY_ZERO but we know `duration` is not zero. */
-        assert(vars.mathErr == MathError.NO_ERROR);
+        ratePerSecond = deposit.div(duration);
 
         /* Create and store the stream object. */
         uint256 streamId = nextStreamId;
-        streams[streamId] = Types.Stream({
+        streams[streamId] = Stream({
             remainingBalance: deposit,
             deposit: deposit,
             isEntity: true,
-            ratePerSecond: vars.ratePerSecond,
+            ratePerSecond: ratePerSecond,
             recipient: recipient,
             sender: msg.sender,
             startTime: startTime,
@@ -285,8 +259,7 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
         });
 
         /* Increment the next stream id. */
-        (vars.mathErr, nextStreamId) = addUInt(nextStreamId, uint256(1));
-        require(vars.mathErr == MathError.NO_ERROR, "next stream id calculation error");
+        nextStreamId = nextStreamId.add(1);
 
         require(IERC20(tokenAddress).transferFrom(msg.sender, address(this), deposit), "token transfer failure");
         emit CreateStream(streamId, msg.sender, recipient, deposit, tokenAddress, startTime, stopTime);
@@ -305,6 +278,7 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
      */
     function withdrawFromStream(uint256 streamId, uint256 amount)
         external
+        override
         whenNotPaused
         nonReentrant
         streamExists(streamId)
@@ -312,15 +286,12 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
         returns (bool)
     {
         require(amount > 0, "amount is zero");
-        Types.Stream memory stream = streams[streamId];
+        Stream memory stream = streams[streamId];
         uint256 balance = balanceOf(streamId, stream.recipient);
-        require(balance >= amount, "amount exceeds the available balance");
+        require(balance >= amount, "amount exceeds the available balance");        
 
-        if (!compoundingStreamsVars[streamId].isEntity) {
-            withdrawFromStreamInternal(streamId, amount);
-        } else {
-            withdrawFromCompoundingStreamInternal(streamId, amount);
-        }
+        withdrawFromStreamInternal(streamId, amount);
+
         return true;
     }
 
@@ -334,24 +305,19 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
      */
     function cancelStream(uint256 streamId)
         external
+        override
         nonReentrant
         streamExists(streamId)
         onlySenderOrRecipient(streamId)
         returns (bool)
     {
-        if (!compoundingStreamsVars[streamId].isEntity) {
-            cancelStreamInternal(streamId);
-        } else {
-            cancelCompoundingStreamInternal(streamId);
-        }
+        
+        cancelStreamInternal(streamId);
+        
         return true;
     }
 
     /*** Internal Effects & Interactions Functions ***/
-
-    struct WithdrawFromStreamInternalLocalVars {
-        MathError mathErr;
-    }
 
     /**
      * @notice Makes the withdrawal to the recipient of the stream.
@@ -361,14 +327,8 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
      *  Throws if there is a token transfer failure.
      */
     function withdrawFromStreamInternal(uint256 streamId, uint256 amount) internal {
-        Types.Stream memory stream = streams[streamId];
-        WithdrawFromStreamInternalLocalVars memory vars;
-        (vars.mathErr, streams[streamId].remainingBalance) = subUInt(stream.remainingBalance, amount);
-        /**
-         * `subUInt` can only return MathError.INTEGER_UNDERFLOW but we know that `remainingBalance` is at least
-         * as big as `amount`. See the `require` check in `withdrawFromInternal`.
-         */
-        assert(vars.mathErr == MathError.NO_ERROR);
+        Stream memory stream = streams[streamId];
+        streams[streamId].remainingBalance = stream.remainingBalance.sub(amount);
 
         if (streams[streamId].remainingBalance == 0) delete streams[streamId];
 
@@ -383,7 +343,7 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
      *  Throws if there is a token transfer failure.
      */
     function cancelStreamInternal(uint256 streamId) internal {
-        Types.Stream memory stream = streams[streamId];
+        Stream memory stream = streams[streamId];
         uint256 senderBalance = balanceOf(streamId, stream.sender);
         uint256 recipientBalance = balanceOf(streamId, stream.recipient);
 
