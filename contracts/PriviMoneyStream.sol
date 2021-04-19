@@ -2,8 +2,6 @@
 
 pragma solidity ^0.8.0;
 
-import "hardhat/console.sol";
-
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
@@ -167,8 +165,12 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
      * @param who The address for which to query the balance.
      * @return The total funds allocated to `who` as uint256.
      */
-    function balanceOf(uint256 streamId, address who) public view override streamExists(streamId) 
-        returns (uint256 balance) 
+    function balanceOf(uint256 streamId, address who)
+        public
+        view
+        override
+        streamExists(streamId)
+        returns (uint256 balance)
     {
         Stream memory stream = streams[streamId];
         uint256 recipientBalance;
@@ -288,7 +290,7 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
         require(amount > 0, "amount is zero");
         Stream memory stream = streams[streamId];
         uint256 balance = balanceOf(streamId, stream.recipient);
-        require(balance >= amount, "amount exceeds the available balance");        
+        require(balance >= amount, "amount exceeds the available balance");
 
         withdrawFromStreamInternal(streamId, amount);
 
@@ -311,9 +313,8 @@ contract PriviMoneyStream is IERC1620, Ownable, Pausable, ReentrancyGuard {
         onlySenderOrRecipient(streamId)
         returns (bool)
     {
-        
         cancelStreamInternal(streamId);
-        
+
         return true;
     }
 

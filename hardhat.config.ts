@@ -68,6 +68,13 @@ const config: HardhatUserConfig = {
       },
       chainId: chainIds.hardhat,
     },
+    mumbai: {
+      url: "https://rpc-mumbai.maticvigil.com",
+      accounts: {
+        mnemonic,
+      },
+      chainId: 80001,
+    },
     goerli: createTestnetConfig("goerli"),
     kovan: createTestnetConfig("kovan"),
     rinkeby: createTestnetConfig("rinkeby"),
@@ -82,13 +89,6 @@ const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.3",
     settings: {
-      metadata: {
-        // Not including the metadata hash
-        // https://github.com/paulrberg/solidity-template/issues/31
-        bytecodeHash: "none",
-      },
-      // You should disable the optimizer when debugging
-      // https://hardhat.org/hardhat-network/#solidity-optimizer-support
       optimizer: {
         enabled: true,
         runs: 800,
