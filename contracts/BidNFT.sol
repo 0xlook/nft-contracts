@@ -15,7 +15,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./libraries/EnumerableMap.sol";
 import "./interfaces/IBidNFT.sol";
 
-
 /**
  * @title Bid NFT
  * @author 0xlook
@@ -139,7 +138,7 @@ contract BidNFT is IBidNFT, ERC721Holder, Ownable, Pausable {
         AskEntry[] memory asks = new AskEntry[](_asksMap.length());
         for (uint256 i = 0; i < _asksMap.length(); ++i) {
             (uint256 tokenId, uint256 price) = _asksMap.at(i);
-            asks[i] = AskEntry({tokenId: tokenId, price: price});
+            asks[i] = AskEntry({ tokenId: tokenId, price: price });
         }
         return asks;
     }
@@ -149,10 +148,10 @@ contract BidNFT is IBidNFT, ERC721Holder, Ownable, Pausable {
         if (_asksMap.length() > 0) {
             for (uint256 i = _asksMap.length() - 1; i > 0; --i) {
                 (uint256 tokenId, uint256 price) = _asksMap.at(i);
-                asks[_asksMap.length() - 1 - i] = AskEntry({tokenId: tokenId, price: price});
+                asks[_asksMap.length() - 1 - i] = AskEntry({ tokenId: tokenId, price: price });
             }
             (uint256 tokenId, uint256 price) = _asksMap.at(0);
-            asks[_asksMap.length() - 1] = AskEntry({tokenId: tokenId, price: price});
+            asks[_asksMap.length() - 1] = AskEntry({ tokenId: tokenId, price: price });
         }
         return asks;
     }
@@ -164,7 +163,7 @@ contract BidNFT is IBidNFT, ERC721Holder, Ownable, Pausable {
             AskEntry[] memory asks = new AskEntry[]((to - from));
             for (uint256 i = 0; from < to; ++i) {
                 (uint256 tokenId, uint256 price) = _asksMap.at(from);
-                asks[i] = AskEntry({tokenId: tokenId, price: price});
+                asks[i] = AskEntry({ tokenId: tokenId, price: price });
                 ++from;
             }
             return asks;
@@ -182,15 +181,15 @@ contract BidNFT is IBidNFT, ERC721Holder, Ownable, Pausable {
             if (to == 0) {
                 for (uint256 i = 0; from > to; ++i) {
                     (uint256 tokenId, uint256 price) = _asksMap.at(from);
-                    asks[i] = AskEntry({tokenId: tokenId, price: price});
+                    asks[i] = AskEntry({ tokenId: tokenId, price: price });
                     --from;
                 }
                 (uint256 tokenId, uint256 price) = _asksMap.at(0);
-                asks[resultSize - 1] = AskEntry({tokenId: tokenId, price: price});
+                asks[resultSize - 1] = AskEntry({ tokenId: tokenId, price: price });
             } else {
                 for (uint256 i = 0; from >= to; ++i) {
                     (uint256 tokenId, uint256 price) = _asksMap.at(from);
-                    asks[i] = AskEntry({tokenId: tokenId, price: price});
+                    asks[i] = AskEntry({ tokenId: tokenId, price: price });
                     --from;
                 }
             }
@@ -204,7 +203,7 @@ contract BidNFT is IBidNFT, ERC721Holder, Ownable, Pausable {
         for (uint256 i = 0; i < _userSellingTokens[user].length(); ++i) {
             uint256 tokenId = _userSellingTokens[user].at(i);
             uint256 price = _asksMap.get(tokenId);
-            asks[i] = AskEntry({tokenId: tokenId, price: price});
+            asks[i] = AskEntry({ tokenId: tokenId, price: price });
         }
         return asks;
     }
@@ -215,11 +214,11 @@ contract BidNFT is IBidNFT, ERC721Holder, Ownable, Pausable {
             for (uint256 i = _userSellingTokens[user].length() - 1; i > 0; --i) {
                 uint256 tokenId = _userSellingTokens[user].at(i);
                 uint256 price = _asksMap.get(tokenId);
-                asks[_userSellingTokens[user].length() - 1 - i] = AskEntry({tokenId: tokenId, price: price});
+                asks[_userSellingTokens[user].length() - 1 - i] = AskEntry({ tokenId: tokenId, price: price });
             }
             uint256 tokenId = _userSellingTokens[user].at(0);
             uint256 price = _asksMap.get(tokenId);
-            asks[_userSellingTokens[user].length() - 1] = AskEntry({tokenId: tokenId, price: price});
+            asks[_userSellingTokens[user].length() - 1] = AskEntry({ tokenId: tokenId, price: price });
         }
         return asks;
     }
@@ -254,7 +253,7 @@ contract BidNFT is IBidNFT, ERC721Holder, Ownable, Pausable {
         require(!_userBids[_to].contains(_tokenId), "Bidder already exists");
         quoteErc20.safeTransferFrom(address(_msgSender()), address(this), _price);
         _userBids[_to].set(_tokenId, _price);
-        _tokenBids[_tokenId].push(BidEntry({bidder: _to, price: _price}));
+        _tokenBids[_tokenId].push(BidEntry({ bidder: _to, price: _price }));
         emit Bid(_msgSender(), _tokenId, _price);
     }
 
@@ -271,7 +270,7 @@ contract BidNFT is IBidNFT, ERC721Holder, Ownable, Pausable {
             quoteErc20.transfer(_to, bidEntry.price - _price);
         }
         _userBids[_to].set(_tokenId, _price);
-        _tokenBids[_tokenId][_index] = BidEntry({bidder: _to, price: _price});
+        _tokenBids[_tokenId][_index] = BidEntry({ bidder: _to, price: _price });
         emit Bid(_msgSender(), _tokenId, _price);
     }
 
@@ -288,7 +287,7 @@ contract BidNFT is IBidNFT, ERC721Holder, Ownable, Pausable {
         for (uint256 i = 0; i < len; i++) {
             if (_address == bidEntries[i].bidder) {
                 _index = i;
-                bidEntry = BidEntry({bidder: bidEntries[i].bidder, price: bidEntries[i].price});
+                bidEntry = BidEntry({ bidder: bidEntries[i].bidder, price: bidEntries[i].price });
                 break;
             }
         }
@@ -352,7 +351,7 @@ contract BidNFT is IBidNFT, ERC721Holder, Ownable, Pausable {
         UserBidEntry[] memory bids = new UserBidEntry[](len);
         for (uint256 i = 0; i < len; i++) {
             (uint256 tokenId, uint256 price) = _userBids[user].at(i);
-            bids[i] = UserBidEntry({tokenId: tokenId, price: price});
+            bids[i] = UserBidEntry({ tokenId: tokenId, price: price });
         }
         return bids;
     }

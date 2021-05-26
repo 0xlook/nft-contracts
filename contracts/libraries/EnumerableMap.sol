@@ -31,7 +31,7 @@ library EnumerableMap {
 
         if (keyIndex == 0) {
             // Equivalent to !contains(map, key)
-            map._entries.push(MapEntry({_key: key, _value: value}));
+            map._entries.push(MapEntry({ _key: key, _value: value }));
             // The entry is stored at length-1, but we add 1 to all indexes
             // and use 0 as a sentinel value
             map._indexes[key] = map._entries.length;
